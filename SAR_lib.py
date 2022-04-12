@@ -50,7 +50,13 @@ class SAR_Project:
         self.show_snippet = False # valor por defecto, se cambia con self.set_snippet()
         self.use_stemming = False # valor por defecto, se cambia con self.set_stemming()
         self.use_ranking = False  # valor por defecto, se cambia con self.set_ranking()
-
+        
+        # VARIABLES AÑADIDAS
+        # Id's
+        self.docid = 0
+        self.newid = 0
+        # Contadores
+        self.
 
     ###############################
     ###                         ###
@@ -171,7 +177,6 @@ class SAR_Project:
 
         with open(filename) as fh:
             jlist = json.load(fh)
-
         #
         # "jlist" es una lista con tantos elementos como noticias hay en el fichero,
         # cada noticia es un diccionario con los campos:
@@ -184,6 +189,26 @@ class SAR_Project:
         #################
         ### COMPLETAR ###
         #################
+            # Asignamos al documento una id
+            self.docs[self.docid] = filename
+            
+            # Para cada noticia del documento
+            for newid, new in enumerate(jlist):
+                # Asignamos a la noticia una id
+                self.news[self.newid] = (self.docid, newid)
+                
+                if (self.multifield) :
+                    self.index['title'] = self.index.get('title', {}) # Mejor así o inicializarlo antes??
+                    title = self.tokenize(new['title'])
+                    for index, word in enumerate(title):
+                        self.index['title']
+                else :
+                
+                # Siguiente new
+                self.newid += 1
+            
+            # Siguiente doc
+            self.docid += 1
 
 
 
