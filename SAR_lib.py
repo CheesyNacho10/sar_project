@@ -1,3 +1,4 @@
+from distutils import filelist
 import json
 from nltk.stem.snowball import SnowballStemmer
 import os
@@ -50,13 +51,6 @@ class SAR_Project:
         self.show_snippet = False # valor por defecto, se cambia con self.set_snippet()
         self.use_stemming = False # valor por defecto, se cambia con self.set_stemming()
         self.use_ranking = False  # valor por defecto, se cambia con self.set_ranking()
-        
-        # VARIABLES AÑADIDAS
-        # Id's
-        self.docid = 0
-        self.newid = 0
-        # Contadores
-        self.
 
     ###############################
     ###                         ###
@@ -148,11 +142,22 @@ class SAR_Project:
         self.stemming = args['stem']
         self.permuterm = args['permuterm']
 
+        # Inicializar diccionarios adicionales
+        self.index['article'] = {}
+        if (self.multifield):
+            self.index['title'] = {}
+            self.index['date'] = {}
+            self.index['keywords'] = {}
+            self.index['summary'] = {}
+
+
         for dir, subdirs, files in os.walk(root):
             for filename in files:
                 if filename.endswith('.json'):
                     fullname = os.path.join(dir, filename)
                     self.index_file(fullname)
+                    
+        self.make_stemming()
 
         ##########################################
         ## COMPLETAR PARA FUNCIONALIDADES EXTRA ##
@@ -190,27 +195,53 @@ class SAR_Project:
         ### COMPLETAR ###
         #################
             # Asignamos al documento una id
-            self.docs[self.docid] = filename
+            self.docs[len(self.docs)] = filename
             
             # Para cada noticia del documento
-            for newid, new in enumerate(jlist):
-                # Asignamos a la noticia una id
-                self.news[self.newid] = (self.docid, newid)
+            for newpos, new in enumerate(jlist):
+                # Asignamos a la noticia una id y la indexamos 
+                # con una tupla (número de documento, posición en el documento)
+                self.news[len(self.news)] = (len(self.docs) - 1, newpos)
                 
-                if (self.multifield) :
-                    self.index['title'] = self.index.get('title', {}) # Mejor así o inicializarlo antes??
-                    title = self.tokenize(new['title'])
-                    for index, word in enumerate(title):
-                        self.index['title']
-                else :
+                if (self.multifield):
+                    for field, tok in self.fields:
+                        self.index_field_of_new(new, field, tok)
+                else:
+                    self.index_field_of_new(new, "article", True)
+
                 
-                # Siguiente new
-                self.newid += 1
-            
-            # Siguiente doc
-            self.docid += 1
+    def index_field_of_new(self, new, field, tok):
+        """
+        Función que indexa el campo de la noticia 
+        pasado como argumento 
 
-
+        Args:
+            new (dict): noticia a indexar
+            field (str): campo a indexar
+        """
+        newid = len(self.news) - 1 # Usamos la longitud como identificador único
+        fieldIndex = self.index[field] # Guardamos la referencia al diccionario del campo
+        fieldList = new[field] # Guardamos el contenido del campo de la noticia
+        if tok: # Si hace falta lo tokenizamos
+            fieldList = self.tokenize(fieldList)
+        else: # Si no transformamos el string en elemento de lista
+            fieldList = [fieldList]
+        for index, word in enumerate(fieldList): # Para cada palabra del campo
+            if (fieldIndex.get(word, 0) == 0): # Si la lista de la palabra no existe la crea
+                fieldIndex[word] = []
+            wordList = fieldIndex[word] # Guardamos la referencia a esta
+            if (self.positional):
+                # Si hemos consultado esta palabra en esta noticia, añadimos su posición
+                if (len(wordList) > 0 and wordList[-1][0] == newid): 
+                    wordList[-1][1].append(index)
+                else: # Si no lo creamos
+                    wordList.append([newid, [index]])
+            else :
+                # Si hemos consultado esta palabra en esta noticia, sumamos 1
+                if (len(wordList) > 0 and wordList[-1][0] == newid): 
+                    wordList[-1][1] += 1
+                else: # Si no lo creamos
+                    wordList.append([newid, 1])
 
     def tokenize(self, text):
         """
@@ -237,11 +268,12 @@ class SAR_Project:
         self.stemmer.stem(token) devuelve el stem del token
 
         """
-        
-        pass
-        ####################################################
-        ## COMPLETAR PARA FUNCIONALIDAD EXTRA DE STEMMING ##
-        ####################################################
+        for field, tok in self.fields:
+            for fieldDict in self.index[field]:
+                if (self.multifield or field == "article"):
+                    for word in fieldDict:
+                        stemedWord = self.stemmer.stem(word)
+                        self.sindex[stemedWord] = self.sindex.get(stemedWord, []).append(word)
 
 
     
