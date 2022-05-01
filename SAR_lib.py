@@ -413,10 +413,17 @@ class SAR_Project:
         return: posting list
 
         """
-        pass
-        ########################################################
-        ## COMPLETAR PARA FUNCIONALIDAD EXTRA DE POSICIONALES ##
-        ########################################################
+        resList = self.index[field][terms[0]]
+        for term in terms[1:]:
+            auxList = resList #
+            resIndex = 0
+            resDoc = resList[resIndex][0]
+            termList = self.index[field][term]
+            termIndex = 0
+            termDoc = termList[termIndex][0]
+            while resIndex < len(resList) and auxList != []:
+                
+            resList = auxList
 
 
     def get_stemming(self, term, field='article'):
