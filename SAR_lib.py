@@ -41,7 +41,7 @@ class SAR_Project:
                         # Si se hace la implementacion multifield, se pude hacer un segundo nivel de hashing de tal forma que:
                         # self.index['title'] seria el indice invertido del campo 'title'.
         self.sindex = {} # hash para el indice invertido de stems --> clave: stem, valor: lista con los terminos que tienen ese stem
-        self.ptindex = {} # hash para el indice permuterm.
+        self.ptindex = {} # hash para el indice permuterm --> clave: permuterm, valor: lista con los terminos que tienen ese permuterm
         self.docs = {} # diccionario de documentos --> clave: entero(docid),  valor: ruta del fichero.
         self.weight = {} # hash de terminos para el pesado, ranking de resultados. puede no utilizarse
         self.news = {} # hash de noticias --> clave entero (newid), valor: la info necesaria para diferenciar la noticia dentro de su fichero (doc_id y posición dentro del documento)
@@ -156,8 +156,11 @@ class SAR_Project:
                 if filename.endswith('.json'):
                     fullname = os.path.join(dir, filename)
                     self.index_file(fullname)
-                    
-        self.make_stemming()
+        
+        if (self.stemming):
+            self.make_stemming()
+        if (self.permuterm):
+            self.make_permuterm()
 
         ##########################################
         ## COMPLETAR PARA FUNCIONALIDADES EXTRA ##
@@ -191,9 +194,6 @@ class SAR_Project:
         #
         #
         #
-        #################
-        ### COMPLETAR ###
-        #################
             # Asignamos al documento una id
             self.docs[len(self.docs)] = filename
             
@@ -269,13 +269,14 @@ class SAR_Project:
 
         """
         for field, tok in self.fields:
-            for fieldDict in self.index[field]:
-                if (self.multifield or field == "article"):
-                    for word in fieldDict:
-                        stemedWord = self.stemmer.stem(word)
-                        self.sindex[stemedWord] = self.sindex.get(stemedWord, []).append(word)
-
-
+            fieldDict = self.index[field]
+            if (self.multifield or field == "article"):
+                self.sindex[field] = {}
+                fieldSindex = self.sindex[field]
+                for word in fieldDict.keys():
+                    stemedWord = self.stemmer.stem(word)
+                    fieldSindex[stemedWord] = fieldSindex.get(stemedWord, [])
+                    fieldSindex[stemedWord].append(word)
     
     def make_permuterm(self):
         """
@@ -284,12 +285,28 @@ class SAR_Project:
         Crea el indice permuterm (self.ptindex) para los terminos de todos los indices.
 
         """
-        pass
-        ####################################################
-        ## COMPLETAR PARA FUNCIONALIDAD EXTRA DE STEMMING ##
-        ####################################################
-
-
+        for field, tok in self.fields:
+            fieldDict = self.index[field]
+            if (self.multifield or field == "article"):
+                self.ptindex[field] = {}
+                fieldPtindex = self.ptindex[field]
+                for word in fieldDict.keys():
+                    for i in range(len(word) + 1):
+                        permWord = word[i:] + '$' + word[:i]
+                        fieldPtindex[permWord] = fieldPtindex.get(permWord, [])
+                        fieldPtindex[permWord].append(word)
+                    """
+                    fieldPtindex[word + '$'] = fieldPtindex.get(word + '$', [])
+                    fieldPtindex[word + '$'].append(word)
+                    fieldPtindex['$' + word] = fieldPtindex.get(word + '$', [])
+                    fieldPtindex['$' + word].append(word)
+                    for i in range(1, len(word)):
+                        pref = word[:i] + '$'
+                        sufi = '$' + word[i:]
+                        fieldPtindex[pref] = fieldPtindex.get(pref, [])
+                        fieldPtindex[pref].append(word)
+                        fieldPtindex[sufi] = fieldPtindex.get(sufi, [])
+                        fieldPtindex[sufi].append(word)"""
 
 
     def show_stats(self):
@@ -299,20 +316,34 @@ class SAR_Project:
         Muestra estadisticas de los indices
         
         """
-        pass
-        ########################################
-        ## COMPLETAR PARA TODAS LAS VERSIONES ##
-        ########################################
-
+        print("=" * 40)
+        print("Number of indexed days:", len(self.docs))
+        print("-" * 40)
+        print("Number of indexed news:", len(self.news))
+        print("-" * 40)
+        print('TOKENS:')
+        for field, tok in self.fields:
+            if (self.multifield or field == "article"):
+                print("\t# of tokens in '{}': {}".format(field, len(self.index[field])))
+        if (self.permuterm):
+            print("-" * 40)
+            print('PERMUTERMS:')
+            for field, tok in self.fields:
+                if (self.multifield or field == "article"):
+                    print("\t# of tokens in '{}': {}".format(field, len(self.ptindex[field])))
+        if (self.stemming):
+            print("-" * 40)
+            print('STEMS:')
+            for field, tok in self.fields:
+                if (self.multifield or field == "article"):
+                    print("\t# of tokens in '{}': {}".format(field, len(self.sindex[field])))
+        print("-" * 40)
+        if (self.positional):
+            print('Positional queries are allowed.')
+        else:    
+            print('Positional queries are NOT allowed.')
+        print("=" * 40)
         
-
-
-
-
-
-
-
-
     ###################################
     ###                             ###
     ###   PARTE 2.1: RECUPERACION   ###
