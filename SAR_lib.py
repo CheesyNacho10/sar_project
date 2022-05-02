@@ -288,14 +288,20 @@ class SAR_Project:
         for field, tok in self.fields:
             fieldDict = self.index[field]
             if (self.multifield or field == "article"):
-                self.ptindex[field] = {}
+                self.ptindex[field] = []
+                # self.ptindex[field] = {} # Implementación fallida
                 fieldPtindex = self.ptindex[field]
                 for word in fieldDict.keys():
+                    for i in range(len(word) + 1):
+                        permWord = word[i:] + '$' + word[:i]
+                        fieldPtindex.append((permWord, word))
+                    """ # Implementación donde cada permuterm era clave de un diccionario
                     for i in range(len(word) + 1):
                         permWord = word[i:] + '$' + word[:i]
                         fieldPtindex[permWord] = fieldPtindex.get(permWord, [])
                         fieldPtindex[permWord].append(word)
                     """
+                    """ Implementación donde cada prefijo y sufijo era una clave de un diccionario
                     fieldPtindex[word + '$'] = fieldPtindex.get(word + '$', [])
                     fieldPtindex[word + '$'].append(word)
                     fieldPtindex['$' + word] = fieldPtindex.get(word + '$', [])
@@ -307,6 +313,8 @@ class SAR_Project:
                         fieldPtindex[pref].append(word)
                         fieldPtindex[sufi] = fieldPtindex.get(sufi, [])
                         fieldPtindex[sufi].append(word)"""
+                fieldPtindex = sorted(fieldPtindex)
+
 
 
     def show_stats(self):
