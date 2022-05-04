@@ -421,18 +421,18 @@ class SAR_Project:
         return: posting list
 
         """
-        resList = self.index[field][terms[0]]
+        fieldDict = self.index[field]
+        resPosting = fieldDict[terms[0]]
         for term in terms[1:]:
-            auxList = resList #
-            resIndex = 0
-            resDoc = resList[resIndex][0]
-            termList = self.index[field][term]
-            termIndex = 0
-            termDoc = termList[termIndex][0]
-            while resIndex < len(resList) and auxList != []:
-                
-            resList = auxList
-
+            termPosting = fieldDict[term]
+            for rData in resPosting:
+                for tData in termPosting:
+                    if rData[0] == tData[0]:
+                        rData[1] = [r for r in rData[1] for t in tData[1] if r+1==t]
+            resPosting = [rData for rData in resPosting if len(rData[1]) > 0]
+            if len(resPosting) == 0:
+                break
+        resPosting = [[rData[0], len(rData[1])] for rData in resPosting]
 
     def get_stemming(self, term, field='article'):
         """
