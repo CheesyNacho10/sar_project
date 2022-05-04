@@ -422,7 +422,7 @@ class SAR_Project:
 
         """
         fieldDict = self.index[field]
-        resPosting = fieldDict[terms[0]]
+        resPosting = fieldDict.get(terms[0])
         for term in terms[1:]:
             termPosting = fieldDict[term]
             for rData in resPosting:
@@ -432,7 +432,7 @@ class SAR_Project:
             resPosting = [rData for rData in resPosting if len(rData[1]) > 0]
             if len(resPosting) == 0:
                 break
-        resPosting = [[rData[0], len(rData[1])] for rData in resPosting]
+        return [[rData[0], len(rData[1])] for rData in resPosting]
 
     def get_stemming(self, term, field='article'):
         """
@@ -446,12 +446,25 @@ class SAR_Project:
         return: posting list
 
         """
-        
         stem = self.stemmer.stem(term)
-
-        ####################################################
-        ## COMPLETAR PARA FUNCIONALIDAD EXTRA DE STEMMING ##
-        ####################################################
+        wordList = self.sindex[field][stem]
+        fieldDict = self.index[field]
+        resPosting = fieldDict.get(wordList[0])
+        for word in wordList[1:]:
+            wordPosting = fieldDict[word]
+            resI = 0; wordI = 0
+            while resI < len(resPosting) and wordI < len(wordPosting):
+                rData = resPosting[resI]
+                wData = wordPosting[wordI]
+                if rData[0] == wData[0]:
+                    rData[1] += wData[1]
+                    resI += 1; wordI += 1
+                elif rData[0] > wData[0]:
+                    resPosting.insert(resI, wData)
+                    resI += 2
+                else:
+                    wordI += 1
+        return resPosting
 
 
     def get_permuterm(self, term, field='article'):
@@ -466,12 +479,29 @@ class SAR_Project:
         return: posting list
 
         """
+        termPartition = term.replace('*', '?').rpartition('?')
+        permuterm = termPartition[2] + '$' + termPartition[0]
+        permuList = self.ptindex.get(field)
+        return self.dicotomica(permuterm, permuList)
 
-        ##################################################
-        ## COMPLETAR PARA FUNCIONALIDAD EXTRA PERMUTERM ##
-        ##################################################
+    def dicotomica(self, permuterm, permuList):
+        inf, sup = 0, len(permuList)-1
+        while inf < sup:
+            centro = ((sup - inf)/2) + inf 
+            if permuList[centro][0] == permuterm: 
+                break
+            else:
+                if permuterm < permuList[centro][0]:
+                    sup = centro - 1
+                else:
+                    inf = centro + 1
 
+        listaPalabras = []
+        while permuList[sup].startswith(permuterm):
+            listaPalabras.append(permuList[1])
+            sup += 1
 
+        return listaPalabras
 
 
     def reverse_posting(self, p):
