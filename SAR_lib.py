@@ -452,18 +452,7 @@ class SAR_Project:
         resPosting = fieldDict.get(wordList[0])
         for word in wordList[1:]:
             wordPosting = fieldDict[word]
-            resI = 0; wordI = 0
-            while resI < len(resPosting) and wordI < len(wordPosting):
-                rData = resPosting[resI]
-                wData = wordPosting[wordI]
-                if rData[0] == wData[0]:
-                    rData[1] += wData[1]
-                    resI += 1; wordI += 1
-                elif rData[0] > wData[0]:
-                    resPosting.insert(resI, wData)
-                    resI += 2
-                else:
-                    wordI += 1
+            resPosting = self.or_posting(resPosting, wordPosting)
         return resPosting
 
 
@@ -482,26 +471,33 @@ class SAR_Project:
         termPartition = term.replace('*', '?').rpartition('?')
         permuterm = termPartition[2] + '$' + termPartition[0]
         permuList = self.ptindex.get(field)
-        return self.dicotomica(permuterm, permuList)
+        listWord = self.dicotomica(permuterm, permuList)
+        fieldDict = self.index.get(field)
+        resPosting = fieldDict[0]
+        for word in listWord[1:]:
+            wordPosting = fieldDict[word]
+            resPosting = self.or_posting(resPosting, wordPosting)
+        return resPosting
+
 
     def dicotomica(self, permuterm, permuList):
-        inf, sup = 0, len(permuList)-1
+        inf, sup = 0, len(permuList) - 1
         while inf < sup:
-            centro = ((sup - inf)/2) + inf 
-            if permuList[centro][0] == permuterm: 
+            center = ((sup - inf)/2) + inf 
+            if permuList[center][0] == permuterm:
                 break
             else:
-                if permuterm < permuList[centro][0]:
-                    sup = centro - 1
+                if permuterm < permuList[center][0]:
+                    sup = center - 1
                 else:
-                    inf = centro + 1
-
-        listaPalabras = []
-        while permuList[sup].startswith(permuterm):
-            listaPalabras.append(permuList[1])
-            sup += 1
-
-        return listaPalabras
+                    inf = center + 1
+        if inf == sup: center = inf
+        listWord = []
+        while permuList[center][0].startswith(permuterm):
+            word = permuList[center][1]
+            if word not in listWord: listWord.append(word)
+            center += 1
+        return listWord
 
 
     def reverse_posting(self, p):
@@ -538,13 +534,18 @@ class SAR_Project:
         return: posting list con los newid incluidos en p1 y p2
 
         """
-        
-        pass
-        ########################################
-        ## COMPLETAR PARA TODAS LAS VERSIONES ##
-        ########################################
-
-
+        iP1 = 0; iP2 = 0
+        while iP1 < len(p1) and iP2 < len(p2):
+            dataP1 = p1[iP1]
+            dataP2 = p2[iP2]
+            if dataP1[0] == dataP2[0]:
+                dataP1[1] += dataP2[1]
+                iP1 += 1; iP2 += 1
+            elif dataP1[0] > dataP2[0]:
+                iP1 += 2
+            else:
+                iP2 += 1
+        return p1
 
     def or_posting(self, p1, p2):
         """
@@ -558,13 +559,19 @@ class SAR_Project:
         return: posting list con los newid incluidos de p1 o p2
 
         """
-
-        
-        pass
-        ########################################
-        ## COMPLETAR PARA TODAS LAS VERSIONES ##
-        ########################################
-
+        iP1 = 0; iP2 = 0
+        while iP1 < len(p1) and iP2 < len(p2):
+            dataP1 = p1[iP1]
+            dataP2 = p2[iP2]
+            if dataP1[0] == dataP2[0]:
+                dataP1[1] += dataP2[1]
+                iP1 += 1; iP2 += 1
+            elif dataP1[0] > dataP2[0]:
+                p1.insert(iP1, dataP2)
+                iP1 += 2
+            else:
+                iP2 += 1
+        return p1
 
     def minus_posting(self, p1, p2):
         """
