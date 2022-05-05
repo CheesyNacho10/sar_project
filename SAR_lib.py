@@ -377,12 +377,7 @@ class SAR_Project:
 
         if query is None or len(query) == 0:
             return []
-
-        ########################################
-        ## COMPLETAR PARA TODAS LAS VERSIONES ##
-        ########################################
-
- 
+        
 
 
     def get_posting(self, term, field='article'):
@@ -402,12 +397,14 @@ class SAR_Project:
         return: posting list
 
         """
-        pass
-        ########################################
-        ## COMPLETAR PARA TODAS LAS VERSIONES ##
-        ########################################
-
-
+        if self.positional:
+            return self.get_positionals(term, field)
+        elif self.permuterm:
+            return self.get_permuterm(term, field)
+        elif self.stemming:
+            return self.get_stemming(term, field)
+        else:
+            return self.index[field][term]
 
     def get_positionals(self, terms, field='article'):
         """
@@ -514,12 +511,9 @@ class SAR_Project:
         return: posting list con todos los newid exceptos los contenidos en p
 
         """
-        
-        pass
-        ########################################
-        ## COMPLETAR PARA TODAS LAS VERSIONES ##
-        ########################################
-
+        news = self.news.keys()
+        p = [newId for newId, f in p]
+        return [newId for newId in news if newId not in p]
 
 
     def and_posting(self, p1, p2):
@@ -586,16 +580,18 @@ class SAR_Project:
         return: posting list con los newid incluidos de p1 y no en p2
 
         """
-
-        
-        pass
-        ########################################################
-        ## COMPLETAR PARA TODAS LAS VERSIONES SI ES NECESARIO ##
-        ########################################################
-
-
-
-
+        iP1 = 0; iP2 = 0
+        while iP1 < len(p1) and iP2 < len(p2):
+            dataP1 = p1[iP1]
+            dataP2 = p2[iP2]
+            if dataP1[0] == dataP2[0]:
+                p1.pop(iP1)
+                iP2 += 1
+            elif dataP1[0] > dataP2[0]:
+                iP1 += 1
+            else:
+                iP2 += 1
+        return p1
 
     #####################################
     ###                               ###
