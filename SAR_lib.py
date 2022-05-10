@@ -3,7 +3,13 @@ import json
 from nltk.stem.snowball import SnowballStemmer
 import os
 import re
+#import regex
 
+reg = r'''(?<rec>\((?:[^()]++|(?&rec))*\))'''
+com = r'''(?<rec>"(?:[^""]++)*")'''
+
+
+print(result.captures('rec'))
 
 class SAR_Project:
     """
@@ -374,10 +380,79 @@ class SAR_Project:
         return: posting list con el resultado de la query
 
         """
-
         if query is None or len(query) == 0:
             return []
+
+        queryList = prepare_query_list(query)
+
+        if len(queryList) == 1:
+            if '\"' in queryList[0]:
+                word = queryList[0].remove('\"')
+                get_posting(word.split())
+
+
+        if len(queryList) > 2:
+            opindex = len(queryList) - 2
+            operation = queryList[opindex]
+            if operation == 'OR':
+                or_posting(solve_query(queryList[0:opindex - 1]), solve_query(queryList[opindex + 1]))
+            elif operation == 'AND':
+                and_posting(solve_query(queryList[0:opindex - 1]), solve_query(queryList[opindex + 1]))
+            elif operation == 'NOT':
+                operation = queryList[opindex-1]
+                if operation == 'OR'
+                    or_posting(solve_query(queryList[0:opindex - 2]), reverse_posting(solve_query(queryList[opindex + 1])))
+                elif operation == 'AND'
+                    and_posting(solve_query(queryList[0:opindex - 2]), reverse_posting(solve_query(queryList[opindex + 1])))
+
+
+
+
         
+    def prepare_query_list(query):
+        """
+        Convierte una query en una lista de elementos, apartando los elementos entre parentesis y comillas
+        Tambien añadimos and donde sea necesario
+        Debe realizar el parsing de consulta que sera mas o menos complicado en funcion de la ampliacion que se implementen
+
+        param:  "query": cadena con la query
+
+        return: lista con los elemetos mas superficiales de la query
+
+        """
+
+        queryPar = regex.split(parentesis,query,flags=regex.VERBOSE) # Separar elementos con parentesis
+        querySep = [] # Lista donde guardaremos las palabras entre comillas como un solo item
+        for item in queryPar:
+            if '(' in item: # si hay parentesis en el elemto, lo guardamos igual
+                querySep.append(item)
+            elif '\"' in item: # si hay comillas, 
+                aux = regex.split(comillas,item,flags=regex.VERBOSE)
+                for element in aux:
+                    if '\"' in element:
+                        querySep.append(element)
+                    else:
+                        querySep += element.split()
+            else:
+                querySep += item.split()
+
+        if '' in querySep: querySep.remove('')
+
+        queryFinal = []
+        needAnd = False # Booleano para saber si hace falta un and
+        for word in querySep:
+            word = word.strip()
+            if not needAnd:
+                queryFinal.append(word)
+                needAnd = True
+            elif word in ['or','and']:
+                queryFinal.append(word)
+                needAnd = False
+            else:
+                queryFinal.append('and')
+                queryFinal.append(word)
+        
+        return queryFinal
 
 
     def get_posting(self, term, field='article'):
