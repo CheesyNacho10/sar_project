@@ -3,13 +3,7 @@ import json
 from nltk.stem.snowball import SnowballStemmer
 import os
 import re
-#import regex
 
-reg = r'''(?<rec>\((?:[^()]++|(?&rec))*\))'''
-com = r'''(?<rec>"(?:[^""]++)*")'''
-
-
-print(result.captures('rec'))
 
 class SAR_Project:
     """
@@ -274,15 +268,17 @@ class SAR_Project:
         self.stemmer.stem(token) devuelve el stem del token
 
         """
-        for field, tok in self.fields:
-            fieldDict = self.index[field]
-            if (self.multifield or field == "article"):
-                self.sindex[field] = {}
-                fieldSindex = self.sindex[field]
-                for word in fieldDict.keys():
-                    stemedWord = self.stemmer.stem(word)
-                    fieldSindex[stemedWord] = fieldSindex.get(stemedWord, [])
-                    fieldSindex[stemedWord].append(word)
+        if self.multifield:
+            for field, tok in self.fields:
+                fieldDict = self.index[field]
+                if (self.multifield or field == "article"):
+                    self.sindex[field] = {}
+                    fieldSindex = self.sindex[field]
+                    for word in fieldDict.keys():
+                        stemedWord = self.stemmer.stem(word)
+                        fieldSindex[stemedWord] = fieldSindex.get(stemedWord, [])
+                        fieldSindex[stemedWord].append(word)
+
     
     def make_permuterm(self):
         """
@@ -365,7 +361,7 @@ class SAR_Project:
     ###################################
 
 
-    def solve_query(self, query, prev={}):
+    def solve_query(self, query, field, prev={}):
         """
         NECESARIO PARA TODAS LAS VERSIONES
 
@@ -383,33 +379,54 @@ class SAR_Project:
         if query is None or len(query) == 0:
             return []
 
-        queryList = prepare_query_list(query)
+        queryList = self.prepare_query_list(query)
 
         if len(queryList) == 1:
-            if '\"' in queryList[0]:
-                word = queryList[0].remove('\"')
-                get_posting(word.split())
+            element = queryList[0]
+            field, element = self.get_field(element)
+            if element.startswith('(') and element.endswith(')'):
+                element = element[1:len(element)-1]
+                return self.solve_query(element)
+            elif self.positional:
+                if '\"' in element:
+                    element = element.replace('\"','')
+                    return self.get_posting(element.split(' '), field)
+                else:
+                    return self.get_posting([element], field)
+            else:
+                return self.get_posting(element, field)
+            
 
 
-        if len(queryList) > 2:
+        if len(queryList) > 1:
             opindex = len(queryList) - 2
             operation = queryList[opindex]
             if operation == 'OR':
-                or_posting(solve_query(queryList[0:opindex - 1]), solve_query(queryList[opindex + 1]))
+                return or_posting(solve_query(queryList[0:opindex - 1]), solve_query(queryList[opindex + 1]))
             elif operation == 'AND':
-                and_posting(solve_query(queryList[0:opindex - 1]), solve_query(queryList[opindex + 1]))
+                return and_posting(solve_query(queryList[0:opindex - 1]), solve_query(queryList[opindex + 1]))
             elif operation == 'NOT':
-                operation = queryList[opindex-1]
-                if operation == 'OR'
-                    or_posting(solve_query(queryList[0:opindex - 2]), reverse_posting(solve_query(queryList[opindex + 1])))
-                elif operation == 'AND'
-                    and_posting(solve_query(queryList[0:opindex - 2]), reverse_posting(solve_query(queryList[opindex + 1])))
+                if opindex > 0: operation = queryList[opindex-1]
+                if operation == 'OR':
+                    return or_posting(solve_query(queryList[0:opindex - 2]), reverse_posting(solve_query(queryList[opindex + 1])))
+                elif operation == 'AND':
+                    return and_posting(solve_query(queryList[0:opindex - 2]), reverse_posting(solve_query(queryList[opindex + 1])))
+                else:
+                    return reverse_posting(solve_query(queryList[opindex + 1]))
 
 
-
+    def get_field(self, query):
+        field = 'article'
+        query = query
+        if ':' in query:
+            field, query =  query[:query.index(':')], query[query.index(':')+1:]
+            if field not in ['title', 'date', 'keywords', 'article', 'summary']: field = 'article'
+        else:
+            field = 'article'
+        return field, query
 
         
-    def prepare_query_list(query):
+    def prepare_query_list(self, query):
         """
         Convierte una query en una lista de elementos, apartando los elementos entre parentesis y comillas
         Tambien añadimos and donde sea necesario
@@ -421,37 +438,87 @@ class SAR_Project:
 
         """
 
-        queryPar = regex.split(parentesis,query,flags=regex.VERBOSE) # Separar elementos con parentesis
-        querySep = [] # Lista donde guardaremos las palabras entre comillas como un solo item
-        for item in queryPar:
-            if '(' in item: # si hay parentesis en el elemto, lo guardamos igual
-                querySep.append(item)
-            elif '\"' in item: # si hay comillas, 
-                aux = regex.split(comillas,item,flags=regex.VERBOSE)
-                for element in aux:
-                    if '\"' in element:
-                        querySep.append(element)
-                    else:
-                        querySep += element.split()
+        if isinstance(query, list): return query
+
+        if '\"' not in query and '(' not in query:
+            return query.split(' ')
+
+        openPar = [m.start() for m in re.finditer(r'\(',query)]
+        closePar = [m.start() for m in re.finditer(r'\)',query)]
+        
+        #
+        # Conteo de parentesis
+        ini = []; fin = []; closed = 0;
+        for index in sorted(openPar + closePar):
+            if closed == 0: ini.append(index)
+            if index in openPar:
+                closed += 1
             else:
-                querySep += item.split()
+                closed -= 1
+            if closed == 0: fin.append(index)
 
-        if '' in querySep: querySep.remove('')
+        # Separar por parentesis mas externos
+        if query[:ini[0]] != '':
+            parenList = [query[:ini[0]].strip()]
+        else: parenList = []
+        for index,element in enumerate(ini):
+            parenList.append(query[ini[index]:fin[index] + 1].strip())
+            if index + 1 < len(ini):
+                parenList.append(query[fin[index] + 1: ini[index + 1]].strip())
+        if len(query) > fin[len(fin) - 1] + 1:
+            parenList.append(query[fin[len(fin) - 1] + 1:].strip())
 
+        # Separar por comillas
+        comList = []
+        for element in parenList:
+            if '\"' in element and '(' not in element:
+                comi = [m.start() for m in re.finditer(r'\"',element)]
+                if element[:comi[0]] != '': elementList = [element[:comi[0]].strip()]
+                else: elementList = []
+                for index, c in enumerate(comi):
+                    if index % 2 == 0:
+                        elementList.append(element[comi[index]:comi[index + 1] + 1])
+                if len(element) > comi[len(comi) - 1] + 1:
+                    elementList.append(element[comi[len(comi) - 1] + 1:].strip())
+                
+                for e in elementList: comList.append(e)
+            else:
+                comList.append(element)
+
+        # Tokenizar aquellos elementos no dependientes de comillas ni parentesis
+        spcList = []
+        for element in comList:
+            if '\"' not in element and '(' not in element:
+                elementList = element.split(' ')
+                for e in elementList: spcList.append(e.strip())
+            else:
+                spcList.append(element)
+
+        # Insertar ands donde haga falta (y unificar en un elemento busqueda posicional y su field)
         queryFinal = []
         needAnd = False # Booleano para saber si hace falta un and
-        for word in querySep:
+        for ind, word in enumerate(spcList):
             word = word.strip()
-            if not needAnd:
+            if word in ['title:', 'date:', 'keywords:', 'article:', 'summary:'] and spcList[ind+1].startswith('"'):
+                spcList[ind+1] = word + spcList[ind+1]
+                if needAnd:
+                    queryFinal.append('and')
+                    needAnd = False
+            elif not needAnd:
                 queryFinal.append(word)
                 needAnd = True
-            elif word in ['or','and']:
-                queryFinal.append(word)
-                needAnd = False
-            else:
-                queryFinal.append('and')
-                queryFinal.append(word)
-        
+                if word == 'not':
+                    needAnd = False
+            elif needAnd:
+                if word in ['or','and']:
+                    queryFinal.append(word)
+                    needAnd = False
+                else:
+                    queryFinal.append('and')
+                    queryFinal.append(word)
+                    if word == 'not':
+                        needAnd = False
+
         return queryFinal
 
 
@@ -472,6 +539,7 @@ class SAR_Project:
         return: posting list
 
         """
+
         if self.positional:
             return self.get_positionals(term, field)
         elif self.permuterm:
@@ -686,9 +754,11 @@ class SAR_Project:
         return: el numero de noticias recuperadas, para la opcion -T
 
         """
-        result = self.solve_query(query)
+        field, query = self.get_field(query)
+        result = self.solve_query(query, field)
         print("%s\t%d" % (query, len(result)))
         return len(result)  # para verificar los resultados (op: -T)
+
 
 
     def solve_and_show(self, query):
@@ -706,6 +776,7 @@ class SAR_Project:
         return: el numero de noticias recuperadas, para la opcion -T
         
         """
+
         result = self.solve_query(query)
         if self.use_ranking:
             result = self.rank_result(result, query)   
