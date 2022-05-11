@@ -3,7 +3,7 @@ import json
 from nltk.stem.snowball import SnowballStemmer
 import os
 import re
-
+import pickle
 
 class SAR_Project:
     """
@@ -271,13 +271,20 @@ class SAR_Project:
         if self.multifield:
             for field, tok in self.fields:
                 fieldDict = self.index[field]
-                if (self.multifield or field == "article"):
-                    self.sindex[field] = {}
-                    fieldSindex = self.sindex[field]
-                    for word in fieldDict.keys():
-                        stemedWord = self.stemmer.stem(word)
-                        fieldSindex[stemedWord] = fieldSindex.get(stemedWord, [])
-                        fieldSindex[stemedWord].append(word)
+                self.sindex[field] = {}
+                fieldSindex = self.sindex[field]
+                for word in fieldDict.keys():
+                    stemedWord = self.stemmer.stem(word)
+                    fieldSindex[stemedWord] = fieldSindex.get(stemedWord, [])
+                    fieldSindex[stemedWord].append(word)
+        else:
+            fieldDict = self.index['article']
+            self.sindex['article'] = {}
+            fieldSindex = self.sindex['article']
+            for word in fieldDict.keys():
+                stemedWord = self.stemmer.stem(word)
+                fieldSindex[stemedWord] = fieldSindex.get(stemedWord, [])
+                fieldSindex[stemedWord].append(word)
 
     
     def make_permuterm(self):
@@ -287,35 +294,45 @@ class SAR_Project:
         Crea el indice permuterm (self.ptindex) para los terminos de todos los indices.
 
         """
-        for field, tok in self.fields:
-            fieldDict = self.index[field]
-            if (self.multifield or field == "article"):
+        if self.multifield:
+            for field, tok in self.fields:
+                fieldDict = self.index[field]
                 self.ptindex[field] = []
-                # self.ptindex[field] = {} # Implementación fallida
                 fieldPtindex = self.ptindex[field]
                 for word in fieldDict.keys():
                     for i in range(len(word) + 1):
                         permWord = word[i:] + '$' + word[:i]
                         fieldPtindex.append((permWord, word))
-                    """ # Implementación donde cada permuterm era clave de un diccionario
-                    for i in range(len(word) + 1):
-                        permWord = word[i:] + '$' + word[:i]
-                        fieldPtindex[permWord] = fieldPtindex.get(permWord, [])
-                        fieldPtindex[permWord].append(word)
-                    """
-                    """ Implementación donde cada prefijo y sufijo era una clave de un diccionario
-                    fieldPtindex[word + '$'] = fieldPtindex.get(word + '$', [])
-                    fieldPtindex[word + '$'].append(word)
-                    fieldPtindex['$' + word] = fieldPtindex.get(word + '$', [])
-                    fieldPtindex['$' + word].append(word)
-                    for i in range(1, len(word)):
-                        pref = word[:i] + '$'
-                        sufi = '$' + word[i:]
-                        fieldPtindex[pref] = fieldPtindex.get(pref, [])
-                        fieldPtindex[pref].append(word)
-                        fieldPtindex[sufi] = fieldPtindex.get(sufi, [])
-                        fieldPtindex[sufi].append(word)"""
                 fieldPtindex = sorted(fieldPtindex)
+        else:
+            fieldDict = self.index['article']
+            self.ptindex['article'] = []
+            fieldPtindex = self.ptindex['article']
+            for word in fieldDict.keys():
+                for i in range(len(word) + 1):
+                    permWord = word[i:] + '$' + word[:i]
+                    fieldPtindex.append((permWord, word))
+            fieldPtindex = sorted(fieldPtindex)
+
+            """ # Implementación donde cada permuterm era clave de un diccionario
+            for i in range(len(word) + 1):
+                permWord = word[i:] + '$' + word[:i]
+                fieldPtindex[permWord] = fieldPtindex.get(permWord, [])
+                fieldPtindex[permWord].append(word)
+            """
+            """ Implementación donde cada prefijo y sufijo era una clave de un diccionario
+            fieldPtindex[word + '$'] = fieldPtindex.get(word + '$', [])
+            fieldPtindex[word + '$'].append(word)
+            fieldPtindex['$' + word] = fieldPtindex.get(word + '$', [])
+            fieldPtindex['$' + word].append(word)
+            for i in range(1, len(word)):
+                pref = word[:i] + '$'
+                sufi = '$' + word[i:]
+                fieldPtindex[pref] = fieldPtindex.get(pref, [])
+                fieldPtindex[pref].append(word)
+                fieldPtindex[sufi] = fieldPtindex.get(sufi, [])
+                fieldPtindex[sufi].append(word)"""
+
 
 
 
@@ -381,12 +398,14 @@ class SAR_Project:
 
         queryList = self.prepare_query_list(query)
 
+        print(queryList)
+
         if len(queryList) == 1:
             element = queryList[0]
             field, element = self.get_field(element)
             if element.startswith('(') and element.endswith(')'):
                 element = element[1:len(element)-1]
-                return self.solve_query(element)
+                return self.solve_query(element, field)
             elif self.positional:
                 if '\"' in element:
                     element = element.replace('\"','')
@@ -402,17 +421,17 @@ class SAR_Project:
             opindex = len(queryList) - 2
             operation = queryList[opindex]
             if operation == 'OR':
-                return or_posting(solve_query(queryList[0:opindex - 1]), solve_query(queryList[opindex + 1]))
+                return self.or_posting(self.solve_query(queryList[0:opindex], field), self.solve_query(queryList[opindex + 1], field))
             elif operation == 'AND':
-                return and_posting(solve_query(queryList[0:opindex - 1]), solve_query(queryList[opindex + 1]))
+                return self.and_posting(self.solve_query(queryList[0:opindex], field), self.solve_query(queryList[opindex + 1], field))
             elif operation == 'NOT':
                 if opindex > 0: operation = queryList[opindex-1]
                 if operation == 'OR':
-                    return or_posting(solve_query(queryList[0:opindex - 2]), reverse_posting(solve_query(queryList[opindex + 1])))
+                    return self.or_posting(self.solve_query(queryList[0:opindex - 1], field), self.reverse_posting(self.solve_query(queryList[opindex + 1], field)))
                 elif operation == 'AND':
-                    return and_posting(solve_query(queryList[0:opindex - 2]), reverse_posting(solve_query(queryList[opindex + 1])))
+                    return self.and_posting(self.solve_query(queryList[0:opindex - 1], field), self.reverse_posting(self.solve_query(queryList[opindex + 1], field)))
                 else:
-                    return reverse_posting(solve_query(queryList[opindex + 1]))
+                    return self.reverse_posting(self.solve_query(queryList[opindex + 1], field))
 
 
     def get_field(self, query):
@@ -502,21 +521,21 @@ class SAR_Project:
             if word in ['title:', 'date:', 'keywords:', 'article:', 'summary:'] and spcList[ind+1].startswith('"'):
                 spcList[ind+1] = word + spcList[ind+1]
                 if needAnd:
-                    queryFinal.append('and')
+                    queryFinal.append('AND')
                     needAnd = False
             elif not needAnd:
                 queryFinal.append(word)
                 needAnd = True
-                if word == 'not':
+                if word == 'NOT':
                     needAnd = False
             elif needAnd:
-                if word in ['or','and']:
+                if word in ['OR','AND']:
                     queryFinal.append(word)
                     needAnd = False
                 else:
-                    queryFinal.append('and')
+                    queryFinal.append('AND')
                     queryFinal.append(word)
-                    if word == 'not':
+                    if word == 'NOT':
                         needAnd = False
 
         return queryFinal
@@ -562,7 +581,7 @@ class SAR_Project:
 
         """
         fieldDict = self.index[field]
-        resPosting = fieldDict.get(terms[0])
+        resPosting = fieldDict.get(terms[0])  #, []) Probablemente habra que añadir esto, da problemas si no
         for term in terms[1:]:
             termPosting = fieldDict[term]
             for rData in resPosting:
@@ -656,7 +675,7 @@ class SAR_Project:
         """
         news = self.news.keys()
         p = [newId for newId, f in p]
-        return [newId for newId in news if newId not in p]
+        return [[newId,[0]] for newId in news if newId not in p]
 
 
     def and_posting(self, p1, p2):
@@ -671,18 +690,20 @@ class SAR_Project:
         return: posting list con los newid incluidos en p1 y p2
 
         """
+        respost = []
         iP1 = 0; iP2 = 0
         while iP1 < len(p1) and iP2 < len(p2):
             dataP1 = p1[iP1]
             dataP2 = p2[iP2]
             if dataP1[0] == dataP2[0]:
-                dataP1[1] += dataP2[1]
+                #dataP1[1] += dataP2[1]
+                respost.append(dataP1)
                 iP1 += 1; iP2 += 1
             elif dataP1[0] > dataP2[0]:
-                iP1 += 2
-            else:
                 iP2 += 1
-        return p1
+            else:
+                iP1 += 1
+        return respost
 
     def or_posting(self, p1, p2):
         """
@@ -696,19 +717,29 @@ class SAR_Project:
         return: posting list con los newid incluidos de p1 o p2
 
         """
+        respost = []
         iP1 = 0; iP2 = 0
         while iP1 < len(p1) and iP2 < len(p2):
             dataP1 = p1[iP1]
             dataP2 = p2[iP2]
             if dataP1[0] == dataP2[0]:
-                dataP1[1] += dataP2[1]
+                #dataP1[1] += dataP2[1]
+                respost.append(dataP1)
                 iP1 += 1; iP2 += 1
             elif dataP1[0] > dataP2[0]:
-                p1.insert(iP1, dataP2)
-                iP1 += 2
-            else:
+                respost.append(dataP2)
                 iP2 += 1
-        return p1
+            else:
+                respost.append(dataP1)
+                iP1 += 1
+        while iP1 < len(p1):
+            respost.append(p1[iP1])
+            iP1 += 1
+        while iP2 < len(p2):
+            respost.append(p2[iP2])
+            iP2 += 1
+
+        return respost
 
     def minus_posting(self, p1, p2):
         """
