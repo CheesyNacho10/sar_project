@@ -618,7 +618,6 @@ class SAR_Project:
         inf, sup = 0, len(permuList) - 1
         while inf < sup:
             center = int(((sup - inf)/2) + inf)
-            #print(inf); print(center); print(sup); print(permuList[center][0]); print(' - - - ')
             if permuterm == permuList[center][0]:
                 break
             elif permuList[center][0] < permuterm: # Mitad derecha
