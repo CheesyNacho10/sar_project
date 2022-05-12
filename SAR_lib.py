@@ -553,12 +553,27 @@ class SAR_Project:
         fieldDict = self.index[field]
         resPosting = fieldDict.get(terms[0], [])
         for term in terms[1:]:
-            termPosting = fieldDict[term]
+            termPosting = fieldDict.get(term, [])
+            """
             for rData in resPosting:
                 for tData in termPosting:
                     if rData[0] == tData[0]:
                         rData[1] = [r for r in rData[1] for t in tData[1] if r+1==t]
-            resPosting = [rData for rData in resPosting if len(rData[1]) > 0]
+            
+            resPosting = [rData for rData in resPosting if len(rData[1]) > 0]"""
+            result = []
+            rIndex = 0; tIndex = 0
+            while rIndex < len(resPosting) and tIndex < len(termPosting):
+                rData = resPosting[rIndex]
+                tData = termPosting[tIndex]
+                if rData[0] == tData[0]:
+                    #dataP1[1] += dataP2[1]
+                    respost.append(dataP1)
+                    iP1 += 1; iP2 += 1
+                elif rData[0] > tData[0]:
+                    iP2 += 1
+                else:
+                    iP1 += 1
             if len(resPosting) == 0:
                 break
         return [[rData[0], len(rData[1])] for rData in resPosting]
