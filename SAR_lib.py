@@ -713,7 +713,6 @@ class SAR_Project:
             dataP1 = p1[iP1]
             dataP2 = p2[iP2]
             if dataP1[0] == dataP2[0]:
-                #dataP1[1] += dataP2[1]
                 respost.append(dataP1)
                 iP1 += 1; iP2 += 1
             elif dataP1[0] > dataP2[0]:
@@ -798,10 +797,40 @@ class SAR_Project:
         
         """
 
-        result = self.solve_query(query)
+        result = self.solve_query(query.lower())
         if self.use_ranking:
             result = self.rank_result(result, query)   
 
+        print("========================")
+        print("Query: '%s'" % query)
+        print("Number of results: %d" % len(result))
+        
+        i = 1
+        for posting in result:
+            (doc,position) = self.news[posting[0]]
+            filename = self.docs[doc]
+            with open(filename) as fh:
+                jlist = json.load(fh)
+                jlist = jlist[position]
+                fecha = jlist['date']
+                title = jlist['title']
+                keywords = jlist['keywords']
+
+            if self.use_ranking is True and len(result)>0:
+                print("#%d\t (%d) (%d) (%s) %s (%s) " % (i, doc, self.weight[id], fecha, title, keywords))
+            else:
+                print("#%d\t (%d) (0) (%s) %s (%s) " % (i, doc, fecha, title, keywords))
+
+            #if self.show_snippet is True:
+                #for snippet in snippets[id]:
+                    #print("\t\t %s" % snippet)
+
+            i += 1
+            if i > self.SHOW_MAX and self.show_all == False:
+                break
+
+        print("========================")
+        return len(result)
         ########################################
         ## COMPLETAR PARA TODAS LAS VERSIONES ##
         ########################################
