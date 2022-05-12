@@ -373,13 +373,11 @@ class SAR_Project:
             element = queryList[0]
             if self.multifield: field, element = self.get_field(element)
             else: field, element = 'article', query
-
             # Si esta entre parentesis, los quitamos y llamamos a solve_query de la consulta interior
             if element.startswith('(') and element.endswith(')'):
                 element = element[1:len(element)-1] 
                 return self.solve_query(element)
-            
-            return self.get_posting(element)
+            return self.get_posting(element, field)
             
 
         if len(queryList) > 1:
