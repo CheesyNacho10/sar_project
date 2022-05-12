@@ -227,8 +227,8 @@ class SAR_Project:
         else: # Si no transformamos el string en elemento de lista
             fieldList = [fieldList]
         for index, word in enumerate(fieldList): # Para cada palabra del campo
-            if (fieldIndex.get(word, 0) == 0): # Si la lista de la palabra no existe la crea
-                fieldIndex[word] = []
+            if (fieldIndex.get(word, 0) == 0): # Si la lista de la palabra no existe
+                fieldIndex[word] = [] # Creamos su posting list
             wordList = fieldIndex[word] # Guardamos la referencia a esta
             if (self.positional):
                 # Si hemos consultado esta palabra en esta noticia, añadimos su posición
@@ -272,13 +272,13 @@ class SAR_Project:
             if self.multifield or field == 'article': # En caso multifield
                 fieldDict = self.index[field]
                 self.sindex[field] = {} # Creamos el diccionario de stems para el campo
-                fieldSindex = self.sindex[field]
+                fieldSindex = self.sindex[field] 
                 for word in fieldDict.keys(): # Para cada palabra el indice del campo
                     stemedWord = self.stemmer.stem(word)
                     # Sino tiene valor para esta clave lo creamos
                     fieldSindex[stemedWord] = fieldSindex.get(stemedWord, [])
                     fieldSindex[stemedWord].append(word) # Añadimos la palabra asociada al stem
-
+    
     def make_permuterm(self):
         """
         NECESARIO PARA LA AMPLIACION DE PERMUTERM
@@ -354,14 +354,13 @@ class SAR_Project:
         return: posting list con el resultado de la query
 
         """
+        # Caso base: query vacia
         if query is None or len(query) == 0:
             return []
 
-
+        #
         if isinstance(query, str): queryList = self.prepare_query_list(query)
         else: queryList = query
-        
-        #print(queryList)
 
         if len(queryList) == 1:
             element = queryList[0]
@@ -790,7 +789,7 @@ class SAR_Project:
         return: el numero de noticias recuperadas, para la opcion -T
         
         """
-        
+
         result = self.solve_query(query.lower())
         if self.use_ranking:
             result = self.rank_result(result, query)   
@@ -809,18 +808,15 @@ class SAR_Project:
                 fecha = jlist['date']
                 title = jlist['title']
                 keywords = jlist['keywords']
-                article = jlist['article']
-
 
             if self.use_ranking is True and len(result)>0:
                 print("#%d\t (%d) (%d) (%s) %s (%s) " % (i, doc, self.weight[id], fecha, title, keywords))
             else:
                 print("#%d\t (%d) (0) (%s) %s (%s) " % (i, doc, fecha, title, keywords))
 
-            
-            if self.show_snippet is True:
-                snippets = self.make_snippets(query, article)
-                print("\t\t %s" % snippets)
+            #if self.show_snippet is True:
+                #for snippet in snippets[id]:
+                    #print("\t\t %s" % snippet)
 
             i += 1
             if i > self.SHOW_MAX and self.show_all == False:
@@ -832,52 +828,6 @@ class SAR_Project:
         ## COMPLETAR PARA TODAS LAS VERSIONES ##
         ########################################
 
-
-
-    def make_snippets(self, query, article):
-        """
-        Crea el snippet para una consulta en una noticia concreta.
-
-        param:  "query": consulta 
-                "article": articulo de la noticia donde sacar el snippet
-
-
-        return: el string con el snippet
-
-        """
-        body = self.tokenize(article)
-        query = query.replace('(', ' ')
-        query = query.replace(')', ' ')
-        query = query.replace('"', ' ')
-        query = query.split(' ')
-        listaindices = []
-        for element in query:
-            if ':' in element:
-                element = element[element.find(':') + 1:]
-            element = element.strip()
-            if element not in ('', 'and','not','or','(',')') and '?' not in element and '*' not in element:
-                for i in range(len(body)):
-                    if self.stemming and self.use_stemming:
-                        stem = self.stemmer.stem(element)
-                        if stem == body[i].strip()[:len(stem)]:
-                            listaindices.append(i)
-                            break
-                    else: 
-                        if element == body[i].strip():
-                            listaindices.append(i)
-                            break
-        listaindices.sort()
-        stringRes = '[...] '
-        if len(listaindices) > 0:
-            for i in listaindices[:len(listaindices)]:
-                izq = 3
-                dch = 3
-                if i < izq:
-                    izq = i
-                if i >= len(body) - dch:
-                    dch = len(body) - i -1
-                stringRes += ' '.join(body[i-izq:i+dch+1]) + ' [...] '
-        return stringRes
 
 
 
