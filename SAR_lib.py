@@ -354,17 +354,18 @@ class SAR_Project:
         return: posting list con el resultado de la query
 
         """
+        # Si no hay nada en la query, devolvemos lista vacia
         if query is None or len(query) == 0:
             return []
 
-
+        # Preproceso de la query si es un string. La convertimos en una lista de elementos (incluidos operaciones, parentesis y posicionales)
         if isinstance(query, str): queryList = self.prepare_query_list(query)
         else: queryList = query
         
-        #print(queryList)
-
+        # Caso base si solo hay un elemento para el que resolver la consulta
         if len(queryList) == 1:
             element = queryList[0]
+            # Si el indice es multicampo, guardamos el campo donde se buscara. Si no lo es, buscamos en 'article'
             if self.multifield: field, element = self.get_field(element)
             else: field, element = 'article', query
             # Si esta entre parentesis, los quitamos y llamamos a solve_query de la consulta interior
@@ -373,19 +374,21 @@ class SAR_Project:
                 return self.solve_query(element)
             return self.get_posting(element, field)
             
-
+        # Caso general: Si hay más de un elemento en la búsqueda        
         if len(queryList) > 1:
             opIndex = len(queryList) - 2
             operation = queryList[opIndex]
             beforeOp = queryList[0:opIndex]
             afterOp = queryList[opIndex + 1]
+            # Llamadas recursivas en función de la operación a realizar
             if operation == 'or':
                 return self.or_posting(self.solve_query(beforeOp), self.solve_query(afterOp))
             elif operation == 'and':
                 return self.and_posting(self.solve_query(beforeOp), self.solve_query(afterOp))
             elif operation == 'not':
-                if opIndex > 0: opIndex -= 1; operation = queryList[opIndex]
-                else: return self.reverse_posting(self.solve_query(afterOp))
+                # Si la operación es not, consultamos si hay otra operación que la precede y resolvemos
+                if opIndex > 0: opIndex -= 1; operation = queryList[opIndex] # Si not es el primer elemento de la lista, no decrementamos el puntero
+                else: return self.reverse_posting(self.solve_query(afterOp)) # Si lo es, resolvemos el not
 
                 beforeOp = queryList[0:opIndex]
                 if operation == 'or':
@@ -397,6 +400,14 @@ class SAR_Project:
 
 
     def get_field(self, query):
+        """
+        Separar campo para la busqueda de query
+
+        param:  "query": cadena con el fragmeto de la query
+
+        return: campo de la busqueda, fragmento de la query
+
+        """
         field = 'article'
 
         if query.startswith(('title:', 'date:', 'keywords:', 'article:', 'summary:')):
@@ -420,7 +431,6 @@ class SAR_Project:
         openPar = [m.start() for m in re.finditer(r'\(',query)]
         closePar = [m.start() for m in re.finditer(r'\)',query)]
         
-        #
         # Conteo de parentesis
         ini = []; fin = []; closed = 0;
         for index in sorted(openPar + closePar):
@@ -516,6 +526,7 @@ class SAR_Project:
         return: posting list
 
         """
+        # Llamada al get que corresponde según los parámetros indicados
         solution = []
         if self.permuterm and ('*' in term or '?' in term):
             solution =  self.get_permuterm(term, field)
@@ -546,15 +557,18 @@ class SAR_Project:
         return: posting list
 
         """
+        # Intersercción de posting lists
         fieldDict = self.index[field]
-        resPosting = fieldDict.get(terms[0], [])
-        for term in terms[1:]:
-            termPosting = fieldDict.get(term, [])
-            result = []
-            rIndex = 0; tIndex = 0
+        resPosting = fieldDict.get(terms[0], []) # Posting list del primer termino de la busqueda posicional
+        for term in terms[1:]: # Para cada termino de la busqueda posicional
+            termPosting = fieldDict.get(term, []) # Guardamos la posting list asociada al siguiente termino
+            result = [] # Creamos lista auxiliar
+            rIndex = 0; tIndex = 0 # Punteros a las dos posting lists
+            # Algoritmo de interseccion de dos posting lists
             while rIndex < len(resPosting) and tIndex < len(termPosting):
                 rData = resPosting[rIndex]
                 tData = termPosting[tIndex]
+                # En caso de coincidir la noticia, añadir aquellas posiciones que son consecutivas
                 if rData[0] == tData[0]:
                     aux = [tEle for tEle in tData[1] if tEle-1 in rData[1]]
                     if (len(aux) > 0):
@@ -580,10 +594,11 @@ class SAR_Project:
 
         return: posting list
 
-        """
+        """        
+        # Sacar union de posting lists de las palabras asociadas al stem del termino
         stem = self.stemmer.stem(term)
         wordList = self.sindex[field].get(stem, [])
-        if len(wordList) == 0: return wordList
+        if len(wordList) == 0: return wordList # Si no existe palabra en el indice asociada al stem, devolvemos una lista vacia
         fieldDict = self.index[field]
         resPosting = fieldDict.get(wordList[0], [])
         for word in wordList[1:]:
@@ -604,7 +619,7 @@ class SAR_Project:
         return: posting list
 
         """
-        strict = '?' in term
+        strict = '?' in term # Booleano para diferenciar el tipo de comodin
         termPartition = term.replace('*', '?').rpartition('?')
         permuterm = termPartition[2] + '$' + termPartition[0]
         permuList = self.ptindex.get(field)
@@ -619,6 +634,16 @@ class SAR_Project:
 
 
     def dicotomica(self, permuterm, permuList, strict):
+        """
+
+        Devuelve lista de palabras asociadas al permuterm.
+
+        param:  "term": termino para recuperar la posting list, "term" incluye un comodin (* o ?).
+                "field": campo sobre el que se debe recuperar la posting list, solo necesario se se hace la ampliacion de multiples indices
+
+        return: posting list
+
+        """
         inf, sup = 0, len(permuList) - 1
         while inf < sup:
             center = int(((sup - inf)/2) + inf)
@@ -635,7 +660,7 @@ class SAR_Project:
         while permuList[center][0].startswith(permuterm):
             word = permuList[center][1]
             if word not in listWord:
-                if not strict or len(permuList[center][0]) <= len(permuterm) + 1:
+                if not strict or len(permuList[center][0]) <= len(permuterm) + 1: # Diferencia el tipo de comodin
                     listWord.append(word)
             center += 1
         return listWord
@@ -679,7 +704,6 @@ class SAR_Project:
             dataP1 = p1[iP1]
             dataP2 = p2[iP2]
             if dataP1[0] == dataP2[0]:
-                #dataP1[1] += dataP2[1]
                 respost.append(dataP1)
                 iP1 += 1; iP2 += 1
             elif dataP1[0] > dataP2[0]:
@@ -828,9 +852,6 @@ class SAR_Project:
 
         print("========================")
         return len(result)
-        ########################################
-        ## COMPLETAR PARA TODAS LAS VERSIONES ##
-        ########################################
 
 
 
@@ -896,7 +917,3 @@ class SAR_Project:
         """
 
         pass
-        
-        ###################################################
-        ## COMPLETAR PARA FUNCIONALIDAD EXTRA DE RANKING ##
-        ###################################################
