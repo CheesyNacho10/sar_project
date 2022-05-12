@@ -601,11 +601,7 @@ class SAR_Project:
         termPartition = term.replace('*', '?').rpartition('?')
         permuterm = termPartition[2] + '$' + termPartition[0]
         permuList = self.ptindex.get(field)
-        print(' - - ')
-        print(permuterm)
-        print(' - - - ')
         listWord = self.dicotomica(permuterm, permuList)
-        print(listWord)
         if len(listWord) == 0: return []
         fieldDict = self.index.get(field)
         resPosting = fieldDict[listWord[0]]
@@ -616,29 +612,22 @@ class SAR_Project:
 
 
     def dicotomica(self, permuterm, permuList):
-        print(len(permuList))
         inf, sup = 0, len(permuList) - 1
-        while inf <= sup:
+        while inf < sup:
             center = int(((sup - inf)/2) + inf)
             if permuterm == permuList[center][0] :
                 break
             else:
                 if permuterm < permuList[center][0]:
-                    sup = center - 1
-                    if permuterm == permuList[sup][0] :
-                        center = sup
-                        break
+                    sup = center
                 else:
                     inf = center + 1
                     if permuterm == permuList[inf][0] :
                         center = inf
                         break
         listWord = []
-        print(center)
-        print(permuList[center])
         while permuList[center][0].startswith(permuterm):
             word = permuList[center][1]
-            print(word)
             if word not in listWord: listWord.append(word)
             center += 1
         return listWord
