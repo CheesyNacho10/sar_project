@@ -459,6 +459,8 @@ class SAR_Project:
                 for index, c in enumerate(comi):
                     if index % 2 == 0:
                         elementList.append(element[comi[index]:comi[index + 1] + 1])
+                    elif index < len(comi) - 1:
+                        elementList.append(element[comi[index] + 1:comi[index + 1]].strip())
                 if len(element) > comi[len(comi) - 1] + 1:
                     elementList.append(element[comi[len(comi) - 1] + 1:].strip())
                 
@@ -554,28 +556,21 @@ class SAR_Project:
         resPosting = fieldDict.get(terms[0], [])
         for term in terms[1:]:
             termPosting = fieldDict.get(term, [])
-            """
-            for rData in resPosting:
-                for tData in termPosting:
-                    if rData[0] == tData[0]:
-                        rData[1] = [r for r in rData[1] for t in tData[1] if r+1==t]
-            
-            resPosting = [rData for rData in resPosting if len(rData[1]) > 0]"""
             result = []
             rIndex = 0; tIndex = 0
             while rIndex < len(resPosting) and tIndex < len(termPosting):
                 rData = resPosting[rIndex]
                 tData = termPosting[tIndex]
                 if rData[0] == tData[0]:
-                    #dataP1[1] += dataP2[1]
-                    lista1, lista2
-                    
-                    result.append(dataP1)
-                    iP1 += 1; iP2 += 1
+                    aux = [tEle for tEle in tData[1] if tEle-1 in rData[1]]
+                    if (len(aux) > 0):
+                        result.append([rData[0], aux])
+                    rIndex += 1; tIndex += 1
                 elif rData[0] > tData[0]:
-                    iP2 += 1
+                    tIndex += 1
                 else:
-                    iP1 += 1
+                    rIndex += 1
+            resPosting = result
             if len(resPosting) == 0:
                 break
         return [[rData[0], len(rData[1])] for rData in resPosting]
@@ -598,7 +593,7 @@ class SAR_Project:
         fieldDict = self.index[field]
         resPosting = fieldDict.get(wordList[0], [])
         for word in wordList[1:]:
-            wordPosting = fieldDict[word]
+            wordPosting = fieldDict.get(word, [])
             resPosting = self.or_posting(resPosting, wordPosting)
         return resPosting
 
@@ -622,7 +617,7 @@ class SAR_Project:
         listWord = self.dicotomica(permuterm, permuList, strict)
         if len(listWord) == 0: return []
         fieldDict = self.index.get(field)
-        resPosting = fieldDict[listWord[0]]
+        resPosting = fieldDict.get(listWord[0], [])
         for word in listWord[1:]:
             wordPosting = fieldDict[word]
             resPosting = self.or_posting(resPosting, wordPosting)
@@ -683,6 +678,7 @@ class SAR_Project:
         return: posting list con los newid incluidos en p1 y p2
 
         """
+        if p1 == [] or p2 == []: return []
         respost = []
         iP1 = 0; iP2 = 0
         while iP1 < len(p1) and iP2 < len(p2):
