@@ -568,7 +568,9 @@ class SAR_Project:
                 tData = termPosting[tIndex]
                 if rData[0] == tData[0]:
                     #dataP1[1] += dataP2[1]
-                    respost.append(dataP1)
+                    lista1, lista2
+                    
+                    result.append(dataP1)
                     iP1 += 1; iP2 += 1
                 elif rData[0] > tData[0]:
                     iP2 += 1
