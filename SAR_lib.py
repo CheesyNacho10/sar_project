@@ -4,6 +4,7 @@ from nltk.stem.snowball import SnowballStemmer
 import os
 import re
 import pickle
+import sys
 
 class SAR_Project:
     """
@@ -268,8 +269,8 @@ class SAR_Project:
         self.stemmer.stem(token) devuelve el stem del token
 
         """
-        if self.multifield:
-            for field, tok in self.fields:
+        for field, tok in self.fields:
+            if self.multifield or field == 'article':
                 fieldDict = self.index[field]
                 self.sindex[field] = {}
                 fieldSindex = self.sindex[field]
@@ -277,14 +278,6 @@ class SAR_Project:
                     stemedWord = self.stemmer.stem(word)
                     fieldSindex[stemedWord] = fieldSindex.get(stemedWord, [])
                     fieldSindex[stemedWord].append(word)
-        else:
-            fieldDict = self.index['article']
-            self.sindex['article'] = {}
-            fieldSindex = self.sindex['article']
-            for word in fieldDict.keys():
-                stemedWord = self.stemmer.stem(word)
-                fieldSindex[stemedWord] = fieldSindex.get(stemedWord, [])
-                fieldSindex[stemedWord].append(word)
 
     
     def make_permuterm(self):
@@ -294,8 +287,8 @@ class SAR_Project:
         Crea el indice permuterm (self.ptindex) para los terminos de todos los indices.
 
         """
-        if self.multifield:
-            for field, tok in self.fields:
+        for field, tok in self.fields:
+            if self.multifield or field == 'article':
                 fieldDict = self.index[field]
                 self.ptindex[field] = []
                 fieldPtindex = self.ptindex[field]
@@ -303,35 +296,7 @@ class SAR_Project:
                     for i in range(len(word) + 1):
                         permWord = word[i:] + '$' + word[:i]
                         fieldPtindex.append((permWord, word))
-                fieldPtindex = sorted(fieldPtindex)
-        else:
-            fieldDict = self.index['article']
-            self.ptindex['article'] = []
-            fieldPtindex = self.ptindex['article']
-            for word in fieldDict.keys():
-                for i in range(len(word) + 1):
-                    permWord = word[i:] + '$' + word[:i]
-                    fieldPtindex.append((permWord, word))
-            fieldPtindex = sorted(fieldPtindex)
-
-            """ # Implementación donde cada permuterm era clave de un diccionario
-            for i in range(len(word) + 1):
-                permWord = word[i:] + '$' + word[:i]
-                fieldPtindex[permWord] = fieldPtindex.get(permWord, [])
-                fieldPtindex[permWord].append(word)
-            """
-            """ Implementación donde cada prefijo y sufijo era una clave de un diccionario
-            fieldPtindex[word + '$'] = fieldPtindex.get(word + '$', [])
-            fieldPtindex[word + '$'].append(word)
-            fieldPtindex['$' + word] = fieldPtindex.get(word + '$', [])
-            fieldPtindex['$' + word].append(word)
-            for i in range(1, len(word)):
-                pref = word[:i] + '$'
-                sufi = '$' + word[i:]
-                fieldPtindex[pref] = fieldPtindex.get(pref, [])
-                fieldPtindex[pref].append(word)
-                fieldPtindex[sufi] = fieldPtindex.get(sufi, [])
-                fieldPtindex[sufi].append(word)"""
+                fieldPtindex.sort()
 
 
 
@@ -378,7 +343,7 @@ class SAR_Project:
     ###################################
 
 
-    def solve_query(self, query, field, prev={}):
+    def solve_query(self, query, prev={}):
         """
         NECESARIO PARA TODAS LAS VERSIONES
 
@@ -396,52 +361,53 @@ class SAR_Project:
         if query is None or len(query) == 0:
             return []
 
-        queryList = self.prepare_query_list(query)
 
-        print(queryList)
+        if isinstance(query, str): queryList = self.prepare_query_list(query)
+        else: queryList = query
+        
+        #print(queryList)
 
         if len(queryList) == 1:
             element = queryList[0]
-            field, element = self.get_field(element)
+            if self.multifield: field, element = self.get_field(element)
+            else: field, element = 'article', query
+
+            # Si esta entre parentesis, los quitamos y llamamos a solve_query de la consulta interior
             if element.startswith('(') and element.endswith(')'):
-                element = element[1:len(element)-1]
-                return self.solve_query(element, field)
-            elif self.positional:
-                if '\"' in element:
-                    element = element.replace('\"','')
-                    return self.get_posting(element.split(' '), field)
-                else:
-                    return self.get_posting([element], field)
-            else:
-                return self.get_posting(element, field)
+                element = element[1:len(element)-1] 
+                return self.solve_query(element)
+            
+            return self.get_posting(element)
             
 
-
         if len(queryList) > 1:
-            opindex = len(queryList) - 2
-            operation = queryList[opindex]
-            if operation == 'OR':
-                return self.or_posting(self.solve_query(queryList[0:opindex], field), self.solve_query(queryList[opindex + 1], field))
-            elif operation == 'AND':
-                return self.and_posting(self.solve_query(queryList[0:opindex], field), self.solve_query(queryList[opindex + 1], field))
-            elif operation == 'NOT':
-                if opindex > 0: operation = queryList[opindex-1]
-                if operation == 'OR':
-                    return self.or_posting(self.solve_query(queryList[0:opindex - 1], field), self.reverse_posting(self.solve_query(queryList[opindex + 1], field)))
-                elif operation == 'AND':
-                    return self.and_posting(self.solve_query(queryList[0:opindex - 1], field), self.reverse_posting(self.solve_query(queryList[opindex + 1], field)))
-                else:
-                    return self.reverse_posting(self.solve_query(queryList[opindex + 1], field))
+            opIndex = len(queryList) - 2
+            operation = queryList[opIndex]
+            beforeOp = queryList[0:opIndex]
+            afterOp = queryList[opIndex + 1]
+            if operation == 'or':
+                return self.or_posting(self.solve_query(beforeOp), self.solve_query(afterOp))
+            elif operation == 'and':
+                return self.and_posting(self.solve_query(beforeOp), self.solve_query(afterOp))
+            elif operation == 'not':
+                if opIndex > 0: opIndex -= 1; operation = queryList[opIndex]
+                else: return self.reverse_posting(self.solve_query(afterOp))
+
+                beforeOp = queryList[0:opIndex]
+                if operation == 'or':
+                    return self.or_posting(self.solve_query(beforeOp), 
+                        self.reverse_posting(self.solve_query(afterOp)))
+                elif operation == 'and':
+                    return self.and_posting(self.solve_query(beforeOp), 
+                        self.reverse_posting(self.solve_query(afterOp)))
 
 
     def get_field(self, query):
         field = 'article'
-        query = query
-        if ':' in query:
-            field, query =  query[:query.index(':')], query[query.index(':')+1:]
-            if field not in ['title', 'date', 'keywords', 'article', 'summary']: field = 'article'
-        else:
-            field = 'article'
+
+        if query.startswith(('title:', 'date:', 'keywords:', 'article:', 'summary:')):
+            field, query = query[:query.index(':')], query[query.index(':')+1:]
+
         return field, query
 
         
@@ -456,11 +422,6 @@ class SAR_Project:
         return: lista con los elemetos mas superficiales de la query
 
         """
-
-        if isinstance(query, list): return query
-
-        if '\"' not in query and '(' not in query:
-            return query.split(' ')
 
         openPar = [m.start() for m in re.finditer(r'\(',query)]
         closePar = [m.start() for m in re.finditer(r'\)',query)]
@@ -477,16 +438,17 @@ class SAR_Project:
             if closed == 0: fin.append(index)
 
         # Separar por parentesis mas externos
-        if query[:ini[0]] != '':
-            parenList = [query[:ini[0]].strip()]
-        else: parenList = []
-        for index,element in enumerate(ini):
-            parenList.append(query[ini[index]:fin[index] + 1].strip())
-            if index + 1 < len(ini):
-                parenList.append(query[fin[index] + 1: ini[index + 1]].strip())
-        if len(query) > fin[len(fin) - 1] + 1:
-            parenList.append(query[fin[len(fin) - 1] + 1:].strip())
-
+        if len(ini) > 0:
+            if query[:ini[0]] != '':
+                parenList = [query[:ini[0]].strip()]
+            else: parenList = []
+            for index,element in enumerate(ini):
+                parenList.append(query[ini[index]:fin[index] + 1].strip())
+                if index + 1 < len(ini):
+                    parenList.append(query[fin[index] + 1: ini[index + 1]].strip())
+            if len(query) > fin[len(fin) - 1] + 1:
+                parenList.append(query[fin[len(fin) - 1] + 1:].strip())
+        else: parenList = [query]
         # Separar por comillas
         comList = []
         for element in parenList:
@@ -521,21 +483,21 @@ class SAR_Project:
             if word in ['title:', 'date:', 'keywords:', 'article:', 'summary:'] and spcList[ind+1].startswith('"'):
                 spcList[ind+1] = word + spcList[ind+1]
                 if needAnd:
-                    queryFinal.append('AND')
+                    queryFinal.append('and')
                     needAnd = False
             elif not needAnd:
                 queryFinal.append(word)
                 needAnd = True
-                if word == 'NOT':
+                if word == 'not':
                     needAnd = False
             elif needAnd:
-                if word in ['OR','AND']:
+                if word in ['or','and']:
                     queryFinal.append(word)
                     needAnd = False
                 else:
-                    queryFinal.append('AND')
+                    queryFinal.append('and')
                     queryFinal.append(word)
-                    if word == 'NOT':
+                    if word == 'not':
                         needAnd = False
 
         return queryFinal
@@ -558,15 +520,23 @@ class SAR_Project:
         return: posting list
 
         """
-
-        if self.positional:
-            return self.get_positionals(term, field)
-        elif self.permuterm:
-            return self.get_permuterm(term, field)
-        elif self.stemming:
-            return self.get_stemming(term, field)
+        solution = []
+        if self.permuterm and ('*' in term or '?' in term):
+            solution =  self.get_permuterm(term, field)
+        elif self.positional:
+            if '\"' in term:
+                term = term.replace('\"','')
+                solution = self.get_positionals(term.split(' '), field)
+            elif self.stemming and self.use_stemming:
+                solution =  self.get_stemming(term, field)
+            else:
+                solution = self.get_positionals([term], field)
+        elif self.stemming and self.use_stemming:
+            solution =  self.get_stemming(term, field)
         else:
-            return self.index[field][term]
+            solution =  self.index[field][term]
+
+        return solution
 
     def get_positionals(self, terms, field='article'):
         """
@@ -581,7 +551,7 @@ class SAR_Project:
 
         """
         fieldDict = self.index[field]
-        resPosting = fieldDict.get(terms[0])  #, []) Probablemente habra que añadir esto, da problemas si no
+        resPosting = fieldDict.get(terms[0], [])
         for term in terms[1:]:
             termPosting = fieldDict[term]
             for rData in resPosting:
@@ -606,9 +576,10 @@ class SAR_Project:
 
         """
         stem = self.stemmer.stem(term)
-        wordList = self.sindex[field][stem]
+        wordList = self.sindex[field].get(stem, [])
+        if len(wordList) == 0: return wordList
         fieldDict = self.index[field]
-        resPosting = fieldDict.get(wordList[0])
+        resPosting = fieldDict.get(wordList[0], [])
         for word in wordList[1:]:
             wordPosting = fieldDict[word]
             resPosting = self.or_posting(resPosting, wordPosting)
@@ -630,9 +601,14 @@ class SAR_Project:
         termPartition = term.replace('*', '?').rpartition('?')
         permuterm = termPartition[2] + '$' + termPartition[0]
         permuList = self.ptindex.get(field)
+        print(' - - ')
+        print(permuterm)
+        print(' - - - ')
         listWord = self.dicotomica(permuterm, permuList)
+        print(listWord)
+        if len(listWord) == 0: return []
         fieldDict = self.index.get(field)
-        resPosting = fieldDict[0]
+        resPosting = fieldDict[listWord[0]]
         for word in listWord[1:]:
             wordPosting = fieldDict[word]
             resPosting = self.or_posting(resPosting, wordPosting)
@@ -640,20 +616,29 @@ class SAR_Project:
 
 
     def dicotomica(self, permuterm, permuList):
+        print(len(permuList))
         inf, sup = 0, len(permuList) - 1
-        while inf < sup:
-            center = ((sup - inf)/2) + inf 
-            if permuList[center][0] == permuterm:
+        while inf <= sup:
+            center = int(((sup - inf)/2) + inf)
+            if permuterm == permuList[center][0] :
                 break
             else:
                 if permuterm < permuList[center][0]:
                     sup = center - 1
+                    if permuterm == permuList[sup][0] :
+                        center = sup
+                        break
                 else:
                     inf = center + 1
-        if inf == sup: center = inf
+                    if permuterm == permuList[inf][0] :
+                        center = inf
+                        break
         listWord = []
+        print(center)
+        print(permuList[center])
         while permuList[center][0].startswith(permuterm):
             word = permuList[center][1]
+            print(word)
             if word not in listWord: listWord.append(word)
             center += 1
         return listWord
@@ -675,7 +660,7 @@ class SAR_Project:
         """
         news = self.news.keys()
         p = [newId for newId, f in p]
-        return [[newId,[0]] for newId in news if newId not in p]
+        return [[newId,0] for newId in news if newId not in p]
 
 
     def and_posting(self, p1, p2):
@@ -717,6 +702,7 @@ class SAR_Project:
         return: posting list con los newid incluidos de p1 o p2
 
         """
+
         respost = []
         iP1 = 0; iP2 = 0
         while iP1 < len(p1) and iP2 < len(p2):
@@ -732,6 +718,7 @@ class SAR_Project:
             else:
                 respost.append(dataP1)
                 iP1 += 1
+
         while iP1 < len(p1):
             respost.append(p1[iP1])
             iP1 += 1
@@ -785,8 +772,7 @@ class SAR_Project:
         return: el numero de noticias recuperadas, para la opcion -T
 
         """
-        field, query = self.get_field(query)
-        result = self.solve_query(query, field)
+        result = self.solve_query(query.lower())
         print("%s\t%d" % (query, len(result)))
         return len(result)  # para verificar los resultados (op: -T)
 

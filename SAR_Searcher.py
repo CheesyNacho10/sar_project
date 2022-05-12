@@ -78,13 +78,15 @@ if __name__ == "__main__":
                     result = searcher.solve_and_count(query)
                     if result != reference:
                         print("==> ERROR: '%s'\t%d\t%d" % (query, result, reference))
-                        sys.exit(-1)
+                        #sys.exit(-1)
                 else:
                     print(line)
             print('\nParece que todo ha ido bien, buen trabajo!')
 
     elif args.query is not None:
         # opt: -Q, una query pasada como argumento
+        print(args.query)
+        print(fnc)
         fnc(args.query) # searcher.solve_and_show(args.query)
 
     elif args.qlist is not None:
