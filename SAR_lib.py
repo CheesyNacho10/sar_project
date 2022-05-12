@@ -6,6 +6,8 @@ import re
 import pickle
 import sys
 
+from numpy import true_divide
+
 class SAR_Project:
     """
     Prototipo de la clase para realizar la indexacion y la recuperacion de noticias
@@ -598,10 +600,11 @@ class SAR_Project:
         return: posting list
 
         """
+        strict = '?' in term
         termPartition = term.replace('*', '?').rpartition('?')
         permuterm = termPartition[2] + '$' + termPartition[0]
         permuList = self.ptindex.get(field)
-        listWord = self.dicotomica(permuterm, permuList)
+        listWord = self.dicotomica(permuterm, permuList, strict)
         if len(listWord) == 0: return []
         fieldDict = self.index.get(field)
         resPosting = fieldDict[listWord[0]]
@@ -611,24 +614,26 @@ class SAR_Project:
         return resPosting
 
 
-    def dicotomica(self, permuterm, permuList):
+    def dicotomica(self, permuterm, permuList, strict):
         inf, sup = 0, len(permuList) - 1
         while inf < sup:
             center = int(((sup - inf)/2) + inf)
-            if permuterm == permuList[center][0] :
+            #print(inf); print(center); print(sup); print(permuList[center][0]); print(' - - - ')
+            if permuterm == permuList[center][0]:
                 break
+            elif permuList[center][0] < permuterm: # Mitad derecha
+                inf = center + 1
             else:
-                if permuterm < permuList[center][0]:
-                    sup = center
-                else:
-                    inf = center + 1
-                    if permuterm == permuList[inf][0] :
-                        center = inf
-                        break
+                sup = center
+                if permuList[center - 1][0] < permuterm:
+                    break
+                    
         listWord = []
         while permuList[center][0].startswith(permuterm):
             word = permuList[center][1]
-            if word not in listWord: listWord.append(word)
+            if word not in listWord:
+                if not strict or len(permuList[center][0]) <= len(permuterm) + 1:
+                    listWord.append(word)
             center += 1
         return listWord
 

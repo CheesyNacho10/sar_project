@@ -85,8 +85,6 @@ if __name__ == "__main__":
 
     elif args.query is not None:
         # opt: -Q, una query pasada como argumento
-        print(args.query)
-        print(fnc)
         fnc(args.query) # searcher.solve_and_show(args.query)
 
     elif args.qlist is not None:
